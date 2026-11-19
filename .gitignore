@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.env
+
+# Bot configs contain API keys — do not commit
+backend/configs.json
+
+# Knowledge base may contain sensitive business data
+backend/*_knowledge.json

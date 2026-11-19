@@ -1,152 +1,141 @@
-<a id="readme-top"></a>
+# ChatSphere
 
-[![Contributors][contributors-shield]][contributors-url]
-[![Forks][forks-shield]][forks-url]
-[![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
-[![LinkedIn][linkedin-shield]][linkedin-url]
+Embeddable AI chatbot: one `<script>` tag on any site, a Node/Express backend that streams tokens over WebSocket, and a React dashboard to configure each bot.
 
-<br />
-<div align="center">
-  <h3 align="center">ChatSphere</h3>
+Runs against a **local Ollama model** or **OpenRouter** (cloud), switchable per bot.
 
-  <p align="center">
-    Planned SaaS chatbot platform with an embeddable widget, context-aware AI, and a React admin dashboard.
-    <br />
-    <a href="https://github.com/Elouahabi-Naoufal/chatsphere/issues">Report Bug</a>
-    &middot;
-    <a href="https://github.com/Elouahabi-Naoufal/chatsphere/issues">Request Feature</a>
-  </p>
-</div>
+> Migrated from `naoufal-emsi/chatsphere` (school account). This is the working April 2026 version; the page-context iteration described in my later write-up is not in this repository yet — see [Roadmap](#roadmap).
 
-<!-- TABLE OF CONTENTS -->
-<details>
-  <summary>Table of Contents</summary>
-  <ol>
-    <li>
-      <a href="#about-the-project">About The Project</a>
-      <ul>
-        <li><a href="#built-with">Built With</a></li>
-      </ul>
-    </li>
-    <li>
-      <a href="#getting-started">Getting Started</a>
-      <ul>
-        <li><a href="#prerequisites">Prerequisites</a></li>
-        <li><a href="#installation">Installation</a></li>
-      </ul>
-    </li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#roadmap">Roadmap</a></li>
-    <li><a href="#contributing">Contributing</a></li>
-    <li><a href="#license">License</a></li>
-    <li><a href="#contact">Contact</a></li>
-    <li><a href="#acknowledgments">Acknowledgments</a></li>
-  </ol>
-</details>
+---
 
-<!-- ABOUT THE PROJECT -->
-## About The Project
+## What is in the repo
 
-ChatSphere is a planned 4th-year PFM project at EMSI: a SaaS chatbot platform built around an embeddable widget, context-aware AI powered by OpenRouter or a local Ollama model, and a React admin dashboard.
+```text
+chatsphere/
+├── backend/
+│   ├── server.js          # Express REST API + WebSocket streaming
+│   ├── package.json
+│   └── configs.json       # bot configs, auto-created, gitignored
+├── widget/
+│   └── widget.js          # dependency-free embeddable widget
+├── dashboard/
+│   ├── index.html
+│   └── src/
+│       ├── App.jsx        # React admin: create/edit bots
+│       ├── main.jsx
+│       └── index.css
+├── demo.html              # integration example
+└── README.md
+```
 
-**Status: scaffold — no code yet.**
+## How it works
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+```text
+Client site
+  └── <script src=".../widget/widget.js" data-bot-id="..." data-server="...">
+          │  fetches bot config (name, colour, welcome message)
+          │  opens WebSocket
+          ▼
+      Node/Express backend
+          ├── loads the bot's system prompt + knowledge base
+          ├── Ollama       (local, default)
+          └── OpenRouter   (cloud, per-bot API key)
+          │
+          ▼
+      tokens streamed back over the same socket
+```
 
-### Built With
+The backend stores bot configurations in `backend/configs.json` — a JSON file, no database. That file is gitignored because it can contain an OpenRouter key.
 
-To be determined.
+## Prerequisites
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+- Node.js 18+
+- Either:
+  - [Ollama](https://ollama.com) running locally, with a model pulled: `ollama pull llama3`
+  - or an OpenRouter API key
 
-<!-- GETTING STARTED -->
-## Getting Started
+## Run it
 
-### Prerequisites
+### 1. Backend
 
-To be determined.
+```bash
+cd backend
+npm install
+npm run dev          # nodemon, or: npm start
+# → http://localhost:3001
+```
 
-### Installation
+### 2. Dashboard
 
-To be determined.
+```bash
+cd dashboard
+npm install
+npm run dev
+# → http://localhost:5173
+```
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+### 3. Create a bot
 
-<!-- USAGE -->
-## Usage
+1. Open `http://localhost:5173`.
+2. Create a bot: name, system prompt, welcome message, colour, model.
+3. Choose the provider: `ollama` (local) or `openrouter` (paste the key).
+4. Optionally attach a knowledge base as JSON — it is appended to the system prompt.
+5. Save; the dashboard gives you a **Bot ID** and the embed snippet.
 
-To be determined.
+### 4. Embed it
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+```html
+<script
+  src="http://localhost:3001/widget/widget.js"
+  data-bot-id="YOUR_BOT_ID"
+  data-server="http://localhost:3001">
+</script>
+```
 
-<!-- ROADMAP -->
+Place it before `</body>`. The widget renders a bubble in the bottom-right corner and streams answers into a chat panel.
+
+### 5. Demo
+
+Open `demo.html`, replace `YOUR_BOT_ID` with a real bot ID, and serve it over HTTP (not `file://`) so the widget can reach the backend.
+
+## API surface
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/config/:botId` | Public bot config used by the widget |
+| `GET` | `/api/configs` | All configs (dashboard) |
+| `POST` | `/api/config` | Create a bot |
+| `PUT` | `/api/config/:botId` | Update a bot |
+| `GET` | `/api/models` | Models available in local Ollama |
+| `GET` | `/api/openrouter/models` | OpenRouter catalogue; `?free=true` filters free models |
+| `POST` | `/api/chat` | One-shot, non-streaming reply |
+| `WS` | `/` | `{type:"chat", botId, message, history}` → `chunk` / `done` / `error` |
+
+## Security status
+
+This is a development build, not a hardened deployment:
+
+- No authentication on the dashboard or the config API.
+- CORS is open (`app.use(cors())`).
+- Bot IDs are public identifiers, not secrets.
+- The OpenRouter key is stored server-side in `configs.json`; it must never be committed.
+- A public bot has no rate limit or origin allow-list.
+
+Before exposing it publicly: add auth, restrict CORS, add per-bot quotas/origin checks, and move the key to a secret store.
+
 ## Roadmap
 
-- [x] Create the repository scaffold
-- [ ] Implement the embeddable chat widget
-- [ ] Add context-aware AI through OpenRouter or local Ollama
-- [ ] Build the React admin dashboard
-- [ ] Document setup and usage
+- [ ] Page-aware context: send the host page's URL, title and visible text with each turn (the iteration described in the ChatSphere write-up; **not implemented here**).
+- [ ] Authentication and multi-tenant isolation.
+- [ ] Rate limiting and origin allow-list per bot.
+- [ ] Conversation persistence and analytics.
+- [ ] Tests: prompt assembly, socket protocol, provider adapter.
+- [ ] Docker Compose for backend + dashboard + Ollama.
 
-See the [open issues](https://github.com/Elouahabi-Naoufal/chatsphere/issues) for a full list of proposed features and known issues.
+## Stack
 
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
+Node.js · Express · `ws` · React · Vite · Ollama · OpenRouter
 
-<!-- CONTRIBUTING -->
-## Contributing
-
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-### Top contributors:
-
-<a href="https://github.com/Elouahabi-Naoufal/chatsphere/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Elouahabi-Naoufal/chatsphere" alt="contrib.rocks image" />
-</a>
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-<!-- LICENSE -->
-## License
-
-This project is not licensed — all rights reserved.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-<!-- CONTACT -->
 ## Contact
 
-Naoufal Elouahabi - [LinkedIn](https://www.linkedin.com/in/elouahabi-naoufal/) - elouahabi-naoufal1@gmail.com
-
-Project Link: [https://github.com/Elouahabi-Naoufal/chatsphere](https://github.com/Elouahabi-Naoufal/chatsphere)
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-<!-- ACKNOWLEDGMENTS -->
-## Acknowledgments
-
-* [Choose an Open Source License](https://choosealicense.com)
-* [Img Shields](https://shields.io)
-* [Best-README-Template](https://github.com/othneildrew/Best-README-Template)
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-<!-- MARKDOWN LINKS & IMAGES -->
-[contributors-shield]: https://img.shields.io/github/contributors/Elouahabi-Naoufal/chatsphere.svg?style=for-the-badge
-[contributors-url]: https://github.com/Elouahabi-Naoufal/chatsphere/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/Elouahabi-Naoufal/chatsphere.svg?style=for-the-badge
-[forks-url]: https://github.com/Elouahabi-Naoufal/chatsphere/network/members
-[stars-shield]: https://img.shields.io/github/stars/Elouahabi-Naoufal/chatsphere.svg?style=for-the-badge
-[stars-url]: https://github.com/Elouahabi-Naoufal/chatsphere/stargazers
-[issues-shield]: https://img.shields.io/github/issues/Elouahabi-Naoufal/chatsphere.svg?style=for-the-badge
-[issues-url]: https://github.com/Elouahabi-Naoufal/chatsphere/issues
-[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
-[linkedin-url]: https://www.linkedin.com/in/elouahabi-naoufal/
+Naoufal Elouahabi — [github.com/Elouahabi-Naoufal](https://github.com/Elouahabi-Naoufal)
